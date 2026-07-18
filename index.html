@@ -288,6 +288,10 @@ header .sub { font-size: 12px; opacity: 0.85; margin-top: 2px; }
   <div class="card hidden" id="dia-panel">
     <div class="day-header">
       <div class="day-title" id="dia-title"></div>
+      <div style="display:flex;gap:6px">
+        <button id="btn-guardar-dia" style="display:none;background:var(--verde);color:#fff;border:0;padding:6px 12px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer">💾 Guardar</button>
+        <button id="btn-deshacer-dia" style="display:none;background:transparent;color:var(--gris);border:1px solid var(--border);padding:6px 12px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer">↩ Deshacer</button>
+      </div>
     </div>
 
     <div class="day-totales">
@@ -598,7 +602,9 @@ header .sub { font-size: 12px; opacity: 0.85; margin-top: 2px; }
   <div class="card">
     <div class="semana-cabecera">
       <h3>Personal activo</h3>
-      <div style="display:flex;gap:6px">
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <button id="btn-guardar-personal" style="display:none;flex:0;padding:8px 14px;background:var(--verde);color:#fff;border:0;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer">💾 Guardar cambios</button>
+        <button id="btn-deshacer-personal" style="display:none;flex:0;padding:8px 14px;background:#fff;color:var(--gris);border:1px solid var(--border);border-radius:6px;font-size:12px;font-weight:600;cursor:pointer">↩ Deshacer</button>
         <button class="btn" style="flex:0; padding:8px 12px;background:var(--naranja-bg);color:var(--naranja);border-color:var(--naranja);font-size:11px" id="btn-cargar-lyon">📥 Cargar plantilla LYON (23)</button>
         <button class="btn primary" style="flex:0; padding:8px 14px" id="btn-add-p">+ Agregar</button>
       </div>
@@ -613,7 +619,11 @@ header .sub { font-size: 12px; opacity: 0.85; margin-top: 2px; }
   <div class="card">
     <div class="semana-cabecera">
       <h3>Catálogo de obra</h3>
-      <button class="btn primary" style="flex:0; padding:8px 14px" id="btn-add-c">+ Agregar</button>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <button id="btn-guardar-catalogo" style="display:none;flex:0;padding:8px 14px;background:var(--verde);color:#fff;border:0;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer">💾 Guardar cambios</button>
+        <button id="btn-deshacer-catalogo" style="display:none;flex:0;padding:8px 14px;background:#fff;color:var(--gris);border:1px solid var(--border);border-radius:6px;font-size:12px;font-weight:600;cursor:pointer">↩ Deshacer</button>
+        <button class="btn primary" style="flex:0; padding:8px 14px" id="btn-add-c">+ Agregar</button>
+      </div>
     </div>
     <div id="cat-list"></div>
   </div>
@@ -760,6 +770,83 @@ const saveExtras = () => localStorage.setItem(STORAGE_EXTRAS, JSON.stringify(ext
 const saveAvance = () => localStorage.setItem(STORAGE_AVANCE, JSON.stringify(avance));
 const saveConfig = () => localStorage.setItem(STORAGE_CONFIG, JSON.stringify(config));
 
+// =========== GUARDAR / DESHACER (control manual de cambios) ===========
+// Las ediciones en Personal, Catálogo y Registro (día) ya no se guardan solas:
+// se quedan "en borrador" hasta que se presiona Guardar, y se pueden descartar con Deshacer.
+let dirty = { personal: false, catalogo: false, dia: false };
+let padronBackup = JSON.parse(JSON.stringify(padron));
+let catalogoBackup = JSON.parse(JSON.stringify(catalogo));
+let diaBackup = null;
+
+function markDirty(section) {
+  dirty[section] = true;
+  const g = document.getElementById('btn-guardar-' + section);
+  const d = document.getElementById('btn-deshacer-' + section);
+  if (g) g.style.display = 'inline-block';
+  if (d) d.style.display = 'inline-block';
+}
+function clearDirty(section) {
+  dirty[section] = false;
+  const g = document.getElementById('btn-guardar-' + section);
+  const d = document.getElementById('btn-deshacer-' + section);
+  if (g) g.style.display = 'none';
+  if (d) d.style.display = 'none';
+}
+
+function guardarPersonal() {
+  savePadron();
+  padronBackup = JSON.parse(JSON.stringify(padron));
+  clearDirty('personal');
+  toast('Personal guardado ✓');
+}
+function deshacerPersonal() {
+  padron = JSON.parse(JSON.stringify(padronBackup));
+  clearDirty('personal');
+  renderPadron();
+  toast('Cambios descartados');
+}
+
+function guardarCatalogo() {
+  saveCat();
+  catalogoBackup = JSON.parse(JSON.stringify(catalogo));
+  clearDirty('catalogo');
+  toast('Catálogo guardado ✓');
+}
+function deshacerCatalogo() {
+  catalogo = JSON.parse(JSON.stringify(catalogoBackup));
+  clearDirty('catalogo');
+  renderCatalogo();
+  toast('Cambios descartados');
+}
+
+function snapshotDia() {
+  if (!selectedDate) { diaBackup = null; return; }
+  diaBackup = {
+    fecha: selectedDate,
+    asist: JSON.parse(JSON.stringify(asistencias[selectedDate] || [])),
+    extras: JSON.parse(JSON.stringify(extras[selectedDate] || {})),
+    avance: JSON.parse(JSON.stringify(avance[selectedDate] || {}))
+  };
+}
+function guardarDia() {
+  saveAsist(); saveExtras(); saveAvance();
+  snapshotDia();
+  clearDirty('dia');
+  toast('Día guardado ✓');
+}
+function deshacerDia() {
+  if (!diaBackup || diaBackup.fecha !== selectedDate) { clearDirty('dia'); return; }
+  if (diaBackup.asist.length > 0) asistencias[selectedDate] = diaBackup.asist; else delete asistencias[selectedDate];
+  if (Object.keys(diaBackup.extras).length > 0) extras[selectedDate] = diaBackup.extras; else delete extras[selectedDate];
+  if (Object.keys(diaBackup.avance).length > 0) avance[selectedDate] = diaBackup.avance; else delete avance[selectedDate];
+  clearDirty('dia');
+  renderDia(); renderCalendario();
+}
+
+window.onbeforeunload = function (e) {
+  if (dirty.personal || dirty.catalogo || dirty.dia) { e.preventDefault(); e.returnValue = ''; return ''; }
+};
+
 let viewMonth = new Date();
 viewMonth.setDate(1);
 let selectedDate = null;
@@ -782,14 +869,14 @@ const setExtras = (fecha, id, hrs) => {
   if (!extras[fecha]) extras[fecha] = {};
   if (hrs > 0) extras[fecha][id] = hrs; else delete extras[fecha][id];
   if (Object.keys(extras[fecha]).length === 0) delete extras[fecha];
-  saveExtras();
+  markDirty('dia');
 };
 const getAvance = (fecha, conceptoId) => (avance[fecha] && avance[fecha][conceptoId]) || 0;
 const setAvance = (fecha, conceptoId, cantidad) => {
   if (!avance[fecha]) avance[fecha] = {};
   if (cantidad > 0) avance[fecha][conceptoId] = cantidad; else delete avance[fecha][conceptoId];
   if (Object.keys(avance[fecha]).length === 0) delete avance[fecha];
-  saveAvance();
+  markDirty('dia');
 };
 
 // =========== CALENDARIO ===========
@@ -823,7 +910,16 @@ function renderCalendario() {
       dotsHtml += '</div>';
     }
     el.innerHTML = `<span>${d}</span>${dotsHtml}`;
-    el.onclick = () => { selectedDate = key; renderCalendario(); renderDia(); };
+    el.onclick = () => {
+      if (dirty.dia) {
+        if (!confirm('Tienes cambios sin guardar en el día actual. ¿Deseas descartarlos y continuar?')) return;
+        deshacerDia();
+      }
+      selectedDate = key;
+      snapshotDia();
+      renderCalendario();
+      renderDia();
+    };
     grid.appendChild(el);
   }
 }
@@ -939,14 +1035,14 @@ function toggleAsist(id) {
   if (idx >= 0) { asistencias[selectedDate].splice(idx, 1); setExtras(selectedDate, id, 0); }
   else asistencias[selectedDate].push(id);
   if (asistencias[selectedDate].length === 0) delete asistencias[selectedDate];
-  saveAsist(); renderDia(); renderCalendario();
+  markDirty('dia'); renderDia(); renderCalendario();
 }
 
 document.getElementById('btn-todos').onclick = () => {
   const filtrado = filtroSub === 'TODOS' ? padron : padron.filter(p => p.s === filtroSub);
   if (!asistencias[selectedDate]) asistencias[selectedDate] = [];
   filtrado.forEach(p => { if (!asistencias[selectedDate].includes(p.id)) asistencias[selectedDate].push(p.id); });
-  saveAsist(); renderDia(); renderCalendario(); toast('Todos marcados');
+  markDirty('dia'); renderDia(); renderCalendario(); toast('Todos marcados (recuerda Guardar)');
 };
 document.getElementById('btn-ninguno').onclick = () => {
   if (!asistencias[selectedDate]) return;
@@ -955,8 +1051,11 @@ document.getElementById('btn-ninguno').onclick = () => {
   asistencias[selectedDate] = asistencias[selectedDate].filter(id => !ids.includes(id));
   ids.forEach(id => setExtras(selectedDate, id, 0));
   if (asistencias[selectedDate].length === 0) delete asistencias[selectedDate];
-  saveAsist(); renderDia(); renderCalendario();
+  markDirty('dia'); renderDia(); renderCalendario();
 };
+
+document.getElementById('btn-guardar-dia').onclick = guardarDia;
+document.getElementById('btn-deshacer-dia').onclick = deshacerDia;
 
 document.getElementById('mes-prev').onclick = () => { viewMonth.setMonth(viewMonth.getMonth()-1); renderCalendario(); };
 document.getElementById('mes-next').onclick = () => { viewMonth.setMonth(viewMonth.getMonth()+1); renderCalendario(); };
@@ -1306,10 +1405,10 @@ function renderPadron() {
     document.body.appendChild(dl);
   }
 
-  cont.querySelectorAll('input, select').forEach(el => { el.onchange = e => { const i = +e.target.dataset.i, k = e.target.dataset.k; if (k === undefined) return; padron[i][k] = k === 'sal' ? +e.target.value : e.target.value; savePadron(); }; });
-  cont.querySelectorAll('.x').forEach(el => { el.onclick = e => { const i = +e.target.dataset.i; if (confirm(`Eliminar a ${padron[i].n}?`)) { padron.splice(i,1); savePadron(); renderPadron(); } }; });
+  cont.querySelectorAll('input, select').forEach(el => { el.onchange = e => { const i = +e.target.dataset.i, k = e.target.dataset.k; if (k === undefined) return; padron[i][k] = k === 'sal' ? +e.target.value : e.target.value; markDirty('personal'); }; });
+  cont.querySelectorAll('.x').forEach(el => { el.onclick = e => { const i = +e.target.dataset.i; if (confirm(`Eliminar a ${padron[i].n}?`)) { padron.splice(i,1); markDirty('personal'); renderPadron(); } }; });
 }
-document.getElementById('btn-add-p').onclick = () => { const maxId = Math.max(0, ...padron.map(p=>p.id)); padron.push({id: maxId+1, n:'', s:'MANESP SA DE CV', e:'', c:'OFICIAL', sal:667}); savePadron(); renderPadron(); };
+document.getElementById('btn-add-p').onclick = () => { const maxId = Math.max(0, ...padron.map(p=>p.id)); padron.push({id: maxId+1, n:'', s:'MANESP SA DE CV', e:'', c:'OFICIAL', sal:667}); markDirty('personal'); renderPadron(); };
 
 document.getElementById('btn-cargar-lyon').onclick = () => {
   const msg = padron.length > 0
@@ -1317,11 +1416,14 @@ document.getElementById('btn-cargar-lyon').onclick = () => {
     : 'Cargar plantilla oficial de LYON (23 personas de MANESP)?';
   if (confirm(msg)) {
     padron = JSON.parse(JSON.stringify(PADRON_DEFAULT));
-    savePadron();
+    markDirty('personal');
     renderPadron();
-    toast('Plantilla LYON cargada (23 personas)');
+    toast('Plantilla LYON cargada — recuerda Guardar');
   }
 };
+
+document.getElementById('btn-guardar-personal').onclick = guardarPersonal;
+document.getElementById('btn-deshacer-personal').onclick = deshacerPersonal;
 
 // =========== CATÁLOGO ===========
 function renderCatalogo() {
@@ -1341,10 +1443,13 @@ function renderCatalogo() {
     `;
     cont.appendChild(row);
   });
-  cont.querySelectorAll('input').forEach(el => { el.onchange = e => { const i = +e.target.dataset.i, k = e.target.dataset.k; catalogo[i][k] = (k === 'vol' || k === 'precio') ? +e.target.value : e.target.value; saveCat(); }; });
-  cont.querySelectorAll('.x').forEach(el => { el.onclick = e => { const i = +e.target.dataset.i; if (confirm(`Eliminar ${catalogo[i].clave}?`)) { catalogo.splice(i,1); saveCat(); renderCatalogo(); } }; });
+  cont.querySelectorAll('input').forEach(el => { el.onchange = e => { const i = +e.target.dataset.i, k = e.target.dataset.k; catalogo[i][k] = (k === 'vol' || k === 'precio') ? +e.target.value : e.target.value; markDirty('catalogo'); }; });
+  cont.querySelectorAll('.x').forEach(el => { el.onclick = e => { const i = +e.target.dataset.i; if (confirm(`Eliminar ${catalogo[i].clave}?`)) { catalogo.splice(i,1); markDirty('catalogo'); renderCatalogo(); } }; });
 }
-document.getElementById('btn-add-c').onclick = () => { const maxId = Math.max(0, ...catalogo.map(c=>c.id)); catalogo.push({id: maxId+1, grupo:'D. EXTRAORDINARIOS', clave:'EXT-NUEVO', desc:'', unidad:'PZA', vol:0, precio:0}); saveCat(); renderCatalogo(); };
+document.getElementById('btn-add-c').onclick = () => { const maxId = Math.max(0, ...catalogo.map(c=>c.id)); catalogo.push({id: maxId+1, grupo:'D. EXTRAORDINARIOS', clave:'EXT-NUEVO', desc:'', unidad:'PZA', vol:0, precio:0}); markDirty('catalogo'); renderCatalogo(); };
+
+document.getElementById('btn-guardar-catalogo').onclick = guardarCatalogo;
+document.getElementById('btn-deshacer-catalogo').onclick = deshacerCatalogo;
 
 // =========== DATOS DEMO ===========
 // Patrón objetivo: sem 1-2 rentables, sem 3-4 pérdida (caída), sem 5-6 recuperación con ganancia mínima
@@ -1484,6 +1589,8 @@ function cargarDatosDemo() {
 
   saveAsist(); saveExtras(); saveAvance();
   selectedDate = null;
+  diaBackup = null;
+  clearDirty('dia');
   document.getElementById('dia-panel').classList.add('hidden');
   viewMonth = new Date(2026, 5, 1); // junio 2026
   toast('Datos demo cargados (patrón: rentable → pérdida → recuperación)');
@@ -1495,6 +1602,8 @@ document.getElementById('btn-reset').onclick = () => {
     asistencias = {}; extras = {}; avance = {};
     saveAsist(); saveExtras(); saveAvance();
     selectedDate = null;
+    diaBackup = null;
+    clearDirty('dia');
     document.getElementById('dia-panel').classList.add('hidden');
     renderCalendario();
     toast('Datos borrados');
@@ -2595,11 +2704,28 @@ renderCalendario();
   var origSetItem = Storage.prototype.setItem.bind(localStorage);
 
   var KEYS = {};
-  KEYS[STORAGE_PADRON] = { apply: function (v) { padron = v; }, render: function () { renderPadron(); renderDia(); } };
-  KEYS[STORAGE_CAT] = { apply: function (v) { catalogo = v; }, render: function () { renderCatalogo(); renderDia(); } };
-  KEYS[STORAGE_ASIST] = { apply: function (v) { asistencias = v; }, render: function () { renderCalendario(); renderDia(); } };
-  KEYS[STORAGE_EXTRAS] = { apply: function (v) { extras = v; }, render: function () { renderDia(); } };
-  KEYS[STORAGE_AVANCE] = { apply: function (v) { avance = v; }, render: function () { renderCalendario(); renderDia(); } };
+  // Si hay cambios sin guardar (dirty) en una sección, no se pisan con datos que lleguen de otro dispositivo:
+  // se aplican en cuanto el usuario guarde o deshaga localmente.
+  KEYS[STORAGE_PADRON] = {
+    apply: function (v) { if (dirty.personal) return; padron = v; padronBackup = JSON.parse(JSON.stringify(v)); },
+    render: function () { renderPadron(); renderDia(); }
+  };
+  KEYS[STORAGE_CAT] = {
+    apply: function (v) { if (dirty.catalogo) return; catalogo = v; catalogoBackup = JSON.parse(JSON.stringify(v)); },
+    render: function () { renderCatalogo(); renderDia(); }
+  };
+  KEYS[STORAGE_ASIST] = {
+    apply: function (v) { if (dirty.dia) return; asistencias = v; },
+    render: function () { if (!dirty.dia) snapshotDia(); renderCalendario(); renderDia(); }
+  };
+  KEYS[STORAGE_EXTRAS] = {
+    apply: function (v) { if (dirty.dia) return; extras = v; },
+    render: function () { if (!dirty.dia) snapshotDia(); renderDia(); }
+  };
+  KEYS[STORAGE_AVANCE] = {
+    apply: function (v) { if (dirty.dia) return; avance = v; },
+    render: function () { if (!dirty.dia) snapshotDia(); renderCalendario(); renderDia(); }
+  };
   KEYS[STORAGE_CONFIG] = { apply: function (v) { config = v; }, render: function () {} };
 
   localStorage.setItem = function (key, value) {
