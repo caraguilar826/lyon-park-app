@@ -19,6 +19,9 @@
 <meta name="theme-color" content="#1F4E78">
 <link rel="apple-touch-icon" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAALQAAAC0CAIAAACyr5FlAAAFS0lEQVR4nO3cb2hVdRzH8fuPuzm90xtX09E2F20rEmoq+sD8E46eZGIPkoE9KDVkUOCDIoNQiFZJQetR/7A2M92TKMopUULlbK5A1owUveG/5fTeud3tzs273T89i+Xuxzpz5/zO8P16uvO7vy/svcPZuYfjLV+/wwPk4zM9ANyLOCARByTigEQckIgDEnFAIg5IxAGJOCARByTigEQckIgDEnFAIg5IxAGJOCARByTigEQckIgDEnFAIg5IxAGJOCARByTigEQckIgDEnFAIg5IxAGJOCARByTigEQckIgDEnFAIg5IxAGJOCAFTG28enFV865n///xjS1HGg98b988N7E63n9KZ7KjY+nUWDqRHI4nhmJ9g9HuePRSrPPMpe5Y/xRuNIWMxXGnCfh9AX+wqDAYDhVVlETG/6ind+Bo59mDbSd/7oqmM1lTE05EHOYtiMzeWLt0Y+3SeH+yubV93+GOxNCw6aE8Hq45XGVuOPTi04/99NFLm9evCPjN/2rMT4CbFM8s3Lll3Re768vm32V2EuJwqYcq72l994XliyoMzkAc7hUqKty7a/PKmkpTAxCHqxUEAx+8vOn+8vlGdicOt5s5o+D9HZsKggb+rySOaaCiJLK9rtb5fYljetj8xIp54ZDDm3ITbGrc4u5+wO+fE5oxNxyqqSpbvbiydtkDfp/lv8mCYOC5DSsbPj1025NawJnDdulMpjcxdOpcz/5vO7a9uW/1tnd+PHFmEp/z5JqaSVR1O4jDad2x/mdea/r4q6NWF0bmzFr24EIbJpKIw4BcLvdG0+HvfjlldeHyRffaMY9CHGbkcrnX97Ra/Q52SXWZTfPkRRzGXLhyzerFx8J/f9dvN+Iw6dhvUUvHL4jMdvKalDhMOtsds3R8wO8rKgzaNMxExGFS38B1q0uI407h83qtLsnlcnZMkhdxmBQunml1yXBq1I5J8iIOkypL51k6Pp3JjtwYs2mYiYjDpEcevs/S8ZfjiUzWucfTicOYipLIKotPeZ3v6bVpmLyIwwyf17tz6zqrNy1OnL5o0zx5EYcBXq/31S2PP7qk2urC47+fs2Mehec5nFZ6d7ihfsOqmiqrC+P9yV//OG/DRBJx2C7g9xXPmjEvHKqpKl2zpHpyD/t4PJ4vf+h08mrUQxxTZXvd2u11a+37/NRoes/XbfZ9fl5cc0wPn3xz7GrfoMObEsc0cO5yb2OLc6+f+AdxuN31kVT9W5+nRtPOb00crpYaTdfv3n/6whUju3NB6l7J4RtbG/Z2OHtvYzzicKmuaPfzbx+4eKXP4AzE4TrJ4RvvtRxpOtiezmTMTkIcLtKbGGpubf/s0HGXvPaJOMzruTbQ1hltPXayrTNq/GwxHnE4JJPNjo5lkmNjieRIvD95tW/wz7/iZy/GuqLdZi8sboE4pobDr0l1Bvc5IBEHJOKARByQiAMScUAiDkjEAWna3ASz4yHNp1750OHnuacXzhyQiAMScUAiDkjEAYk4IBEHJOKARByQiAMScUDylq/fYXoGuBRnDkjEAYk4IBEHJOKARByQiAMScUAiDkjEAYk4IBEHJOKARByQiAMScUAiDkjEAYk4IBEHJOKARByQiAMScUAiDkjEAYk4IBEHJOKARByQiAMScUAiDkjEAYk4IBEHJOKAFJhdvcr0DHApzhyQiAMScUAiDkjEAYk4IBEHJOKARByQiAMScUAiDkjEAelvAGoxw8okOQIAAAAASUVORK5CYII=">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.js" integrity="sha384-iU8HYtnGQ8Cy4zl7gbNMOhsDTTKX02BTXptVP/vqAWIaTfM7isw76iyZCsjL2eVi" crossorigin="anonymous"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <style>
 :root { color-scheme: light; --azul:#1F4E78; --azul-bg:#E8F0F8; --azul2:#2E75B6; --gris:#666; --bg:#FAFAFA; --card:#FFFFFF; --border:#E5E5E5; --verde:#2E7D32; --verde-bg:#E8F5E9; --naranja:#E65100; --naranja-bg:#FFF3E0; --rojo:#C62828; --rojo-bg:#FFEBEE; }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -241,7 +244,16 @@ header .sub { font-size: 12px; opacity: 0.85; margin-top: 2px; }
 </style>
 </head>
 <body>
-<div class="wrap">
+
+<div id="login-gate" style="position:fixed;inset:0;background:linear-gradient(135deg,#1F4E78,#2E75B6);color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;z-index:2000;text-align:center;padding:24px;">
+  <div style="font-size:20px;font-weight:700">ASISTENCIA Y AVANCE</div>
+  <div style="font-size:13px;opacity:0.85">LYON PARK PLAZA · CINEMEX</div>
+  <div id="login-msg" style="font-size:13px;opacity:0.9;max-width:300px;margin-top:6px;line-height:1.5">Cargando...</div>
+  <button id="btn-google-login" style="display:none;background:#fff;color:#1F4E78;border:0;padding:12px 22px;border-radius:8px;font-weight:700;font-size:14px;cursor:pointer;margin-top:8px">Iniciar sesión con Google</button>
+  <button id="btn-google-logout" style="display:none;background:transparent;color:#fff;border:1px solid #fff;padding:10px 18px;border-radius:8px;font-weight:600;font-size:13px;cursor:pointer;margin-top:8px">Cerrar sesión</button>
+</div>
+
+<div class="wrap" style="display:none">
 
 <header>
   <h1>ASISTENCIA Y AVANCE · LYON PARK PLAZA</h1>
@@ -2564,6 +2576,94 @@ document.querySelectorAll('.tabs > .tab').forEach(t => {
 });
 
 renderCalendario();
+</script>
+
+<script>
+(function () {
+  var firebaseConfig = {
+    apiKey: "AIzaSyAki-AMOjk3e-MDM_BBT-KxsPT30o7o_hA",
+    authDomain: "lyon-park-app.firebaseapp.com",
+    projectId: "lyon-park-app",
+    storageBucket: "lyon-park-app.firebasestorage.app",
+    messagingSenderId: "847420356557",
+    appId: "1:847420356557:web:2ba0049b39cec4eb92b684"
+  };
+  firebase.initializeApp(firebaseConfig);
+  var auth = firebase.auth();
+  var db = firebase.firestore();
+  var ALLOWED_EMAIL = 'car.aguilar.826@gmail.com';
+  var origSetItem = Storage.prototype.setItem.bind(localStorage);
+
+  var KEYS = {};
+  KEYS[STORAGE_PADRON] = { apply: function (v) { padron = v; }, render: function () { renderPadron(); renderDia(); } };
+  KEYS[STORAGE_CAT] = { apply: function (v) { catalogo = v; }, render: function () { renderCatalogo(); renderDia(); } };
+  KEYS[STORAGE_ASIST] = { apply: function (v) { asistencias = v; }, render: function () { renderCalendario(); renderDia(); } };
+  KEYS[STORAGE_EXTRAS] = { apply: function (v) { extras = v; }, render: function () { renderDia(); } };
+  KEYS[STORAGE_AVANCE] = { apply: function (v) { avance = v; }, render: function () { renderCalendario(); renderDia(); } };
+  KEYS[STORAGE_CONFIG] = { apply: function (v) { config = v; }, render: function () {} };
+
+  localStorage.setItem = function (key, value) {
+    origSetItem(key, value);
+    if (KEYS[key] && auth.currentUser && auth.currentUser.email === ALLOWED_EMAIL) {
+      db.collection('lyonpark').doc(key).set({ json: value, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+    }
+  };
+
+  var listenersStarted = false;
+  function startListeners() {
+    if (listenersStarted) return;
+    listenersStarted = true;
+    Object.keys(KEYS).forEach(function (key) {
+      db.collection('lyonpark').doc(key).onSnapshot(function (snap) {
+        if (!snap.exists) {
+          var current = localStorage.getItem(key);
+          if (current) db.collection('lyonpark').doc(key).set({ json: current, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+          return;
+        }
+        var jsonStr = snap.data().json;
+        if (jsonStr === undefined || localStorage.getItem(key) === jsonStr) return;
+        origSetItem(key, jsonStr);
+        try { KEYS[key].apply(JSON.parse(jsonStr)); } catch (e) {}
+        try { KEYS[key].render(); } catch (e) {}
+      }, function (err) { console.error('Error de sincronizacion', key, err); });
+    });
+  }
+
+  var gate = document.getElementById('login-gate');
+  var msg = document.getElementById('login-msg');
+  var btn = document.getElementById('btn-google-login');
+  var btnOut = document.getElementById('btn-google-logout');
+  var wrap = document.querySelector('.wrap');
+
+  btn.onclick = function () {
+    var provider = new firebase.auth.GoogleAuthProvider();
+    msg.textContent = 'Conectando...';
+    auth.signInWithPopup(provider).catch(function (err) {
+      msg.textContent = 'No se pudo iniciar sesion: ' + err.message;
+    });
+  };
+  btnOut.onclick = function () { auth.signOut(); };
+
+  auth.onAuthStateChanged(function (user) {
+    if (user && user.email === ALLOWED_EMAIL) {
+      gate.style.display = 'none';
+      wrap.style.display = '';
+      startListeners();
+    } else if (user) {
+      wrap.style.display = 'none';
+      gate.style.display = 'flex';
+      msg.textContent = 'La cuenta ' + user.email + ' no tiene acceso a esta obra.';
+      btn.style.display = 'none';
+      btnOut.style.display = 'inline-block';
+    } else {
+      wrap.style.display = 'none';
+      gate.style.display = 'flex';
+      msg.textContent = 'Inicia sesion para acceder a los datos de la obra, sincronizados en todos tus dispositivos.';
+      btn.style.display = 'inline-block';
+      btnOut.style.display = 'none';
+    }
+  });
+})();
 </script>
 </body>
 </html>
