@@ -267,8 +267,9 @@ header .sub { font-size: 12px; opacity: 0.85; margin-top: 2px; }
     <div style="font-size:16px;font-weight:700">Diagnóstico de conexión</div>
     <button id="diag-close" style="background:#333;color:#fff;border:0;padding:8px 14px;border-radius:6px;font-size:13px">Cerrar</button>
   </div>
-  <button id="diag-run" style="width:100%;padding:16px;font-size:15px;font-weight:700;background:#2E7D32;color:#fff;border:0;border-radius:8px;margin-bottom:14px">▶ Probar ahora</button>
-  <pre id="diag-output" style="white-space:pre-wrap;word-break:break-word;background:#000;padding:12px;border-radius:8px;min-height:120px;margin:0">Toca "Probar ahora" para revisar la conexión con la nube.</pre>
+  <button id="diag-run" style="width:100%;padding:16px;font-size:15px;font-weight:700;background:#2E7D32;color:#fff;border:0;border-radius:8px;margin-bottom:10px">▶ Probar ahora (conexión directa)</button>
+  <button id="diag-run2" style="width:100%;padding:16px;font-size:15px;font-weight:700;background:#1F4E78;color:#fff;border:0;border-radius:8px;margin-bottom:14px">▶ Probar guardado real (como Personal/Registro)</button>
+  <pre id="diag-output" style="white-space:pre-wrap;word-break:break-word;background:#000;padding:12px;border-radius:8px;min-height:120px;margin:0">Toca un botón para revisar.</pre>
 </div>
 
 <div class="tabs">
@@ -2896,6 +2897,56 @@ renderCalendario();
         lineas.push('>>> RESULTADO: FALLÓ. Manda captura de esto completo. <<<');
         pintar();
       });
+  };
+
+  var diagRun2 = document.getElementById('diag-run2');
+  if (diagRun2) diagRun2.onclick = function () {
+    // Esta prueba usa el MISMO camino que usa Personal/Registro de verdad (savePadron/saveAsist,
+    // el localStorage.setItem parchado, el candado de clientTs y el listener en vivo), pero sobre
+    // una fecha de prueba que no toca tus datos reales — para reproducir el problema tal cual.
+    var lineas = [];
+    function pintar() { diagOutput.textContent = lineas.join('\n'); }
+    var FECHA_PRUEBA = '1999-01-01';
+    lineas.push('Hora: ' + new Date().toLocaleString('es-MX'));
+    lineas.push('');
+    lineas.push('1) Guardando asistencia de prueba en fecha ' + FECHA_PRUEBA + ' (con saveAsist real)…');
+    pintar();
+    var valorEscrito = [999999];
+    asistencias[FECHA_PRUEBA] = valorEscrito.slice();
+    saveAsist(); // exactamente lo que hace guardarDia()
+    var tsEscrito = Number(localStorage.getItem(STORAGE_ASIST + '__ts') || 0);
+    lineas.push('   Escrito en memoria: ' + JSON.stringify(asistencias[FECHA_PRUEBA]));
+    lineas.push('   Escrito en localStorage: ' + (JSON.parse(localStorage.getItem(STORAGE_ASIST))[FECHA_PRUEBA] ? 'sí' : 'NO'));
+    lineas.push('');
+    lineas.push('2) Esperando 4 segundos (tiempo para que el listener en vivo reaccione)…');
+    pintar();
+    setTimeout(function () {
+      var enMemoria = asistencias[FECHA_PRUEBA];
+      var enLocalStorage = JSON.parse(localStorage.getItem(STORAGE_ASIST) || '{}')[FECHA_PRUEBA];
+      lineas.push('');
+      lineas.push('3) Resultado después de esperar:');
+      lineas.push('   En memoria (asistencias): ' + JSON.stringify(enMemoria || null));
+      lineas.push('   En localStorage: ' + JSON.stringify(enLocalStorage || null));
+      pintar();
+      db.collection('lyonpark').doc(STORAGE_ASIST).get({ source: 'server' }).then(function (snap) {
+        var enServidor = snap.exists ? JSON.parse(snap.data().json)[FECHA_PRUEBA] : null;
+        lineas.push('   En el servidor: ' + JSON.stringify(enServidor || null));
+        var ok = enMemoria && enMemoria.length === 1 && enMemoria[0] === 999999 &&
+          enLocalStorage && enLocalStorage.length === 1 &&
+          enServidor && enServidor.length === 1;
+        lineas.push('');
+        lineas.push(ok ? '>>> RESULTADO: TODO BIEN. El guardado real SÍ funciona en este celular. <<<' : '>>> RESULTADO: FALLÓ — aquí está el problema real. <<<');
+        pintar();
+        // Limpieza: quitar la fecha de prueba para no dejar basura.
+        delete asistencias[FECHA_PRUEBA];
+        saveAsist();
+      }).catch(function (err) {
+        lineas.push('   Error leyendo el servidor: ' + ((err && (err.code || err.message)) || err));
+        pintar();
+        delete asistencias[FECHA_PRUEBA];
+        saveAsist();
+      });
+    }, 4000);
   };
 
   var gate = document.getElementById('login-gate');
