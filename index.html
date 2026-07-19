@@ -2742,12 +2742,18 @@ renderCalendario();
   // Indicador visible de sincronización (debajo del título) para poder diagnosticar desde el
   // propio celular sin necesidad de consola: muestra si está sincronizando, si terminó bien,
   // o el error exacto si algo falla.
+  // OJO: al guardar un día se escriben varias claves a la vez (asistencia, horas extra, avance).
+  // Cada una sincroniza por su cuenta; si el estado se pintara solo con el último aviso que
+  // llega, una falla en una clave se podía tapar con el éxito de otra que termina después.
+  // Por eso llevamos el estado POR CLAVE y el indicador muestra el peor caso, no el último.
   var pendingSync = 0;
-  function actualizarEstadoSync(errorMsg) {
+  var syncFailures = {};
+  function actualizarEstadoSync() {
     var el = document.getElementById('sync-status');
     if (!el) return;
-    if (errorMsg) {
-      el.textContent = '⚠ Error al sincronizar: ' + errorMsg;
+    var claveFallida = Object.keys(syncFailures)[0];
+    if (claveFallida) {
+      el.textContent = '⚠ ' + syncFailures[claveFallida];
       el.style.color = '#FFCDD2';
     } else if (pendingSync > 0) {
       el.textContent = '↻ Sincronizando con la nube…';
@@ -2775,15 +2781,17 @@ renderCalendario();
         pendingSync--;
         var llego = snap.exists && snap.data().clientTs === ts;
         if (!llego) {
-          actualizarEstadoSync('el cambio quedó guardado en el celular pero aún no llega al servidor (sin señal). Se reintentará solo.');
+          syncFailures[key] = 'No se pudo confirmar "' + key + '" en el servidor (sin señal). Se reintentará solo.';
         } else {
-          actualizarEstadoSync();
+          delete syncFailures[key];
         }
+        actualizarEstadoSync();
       })
       .catch(function (err) {
         pendingSync--;
         console.error('Error guardando en la nube:', key, err);
-        actualizarEstadoSync((err && (err.message || err.code)) || 'sin conexión con el servidor');
+        syncFailures[key] = 'Error guardando "' + key + '": ' + ((err && (err.message || err.code)) || 'sin conexión con el servidor');
+        actualizarEstadoSync();
         avisarErrorSync();
       });
   }
