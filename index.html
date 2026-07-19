@@ -2765,11 +2765,25 @@ renderCalendario();
     pendingSync++;
     actualizarEstadoSync();
     return db.collection('lyonpark').doc(key).set({ json: value, clientTs: ts, updatedAt: firebase.firestore.FieldValue.serverTimestamp() })
-      .then(function () { pendingSync--; actualizarEstadoSync(); })
+      .then(function () {
+        // Con el guardado local activado, la escritura se marca "lista" en cuanto queda en la
+        // cola del celular, aunque todavía no haya llegado al servidor. Para no mentir en el
+        // indicador, confirmamos leyendo directo del servidor (fuente 'server', sin caché).
+        return db.collection('lyonpark').doc(key).get({ source: 'server' });
+      })
+      .then(function (snap) {
+        pendingSync--;
+        var llego = snap.exists && snap.data().clientTs === ts;
+        if (!llego) {
+          actualizarEstadoSync('el cambio quedó guardado en el celular pero aún no llega al servidor (sin señal). Se reintentará solo.');
+        } else {
+          actualizarEstadoSync();
+        }
+      })
       .catch(function (err) {
         pendingSync--;
         console.error('Error guardando en la nube:', key, err);
-        actualizarEstadoSync((err && (err.message || err.code)) || 'error desconocido');
+        actualizarEstadoSync((err && (err.message || err.code)) || 'sin conexión con el servidor');
         avisarErrorSync();
       });
   }
