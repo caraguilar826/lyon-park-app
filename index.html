@@ -258,6 +258,7 @@ header .sub { font-size: 12px; opacity: 0.85; margin-top: 2px; }
 <header>
   <h1>ASISTENCIA Y AVANCE · LYON PARK PLAZA</h1>
   <div class="sub">CINEMEX · Contrato $300,871.91 · Lista de Raya + Destajo integrado</div>
+  <div id="sync-status" style="font-size:10px;margin-top:5px;opacity:0.95">Conectando…</div>
 </header>
 
 <div class="tabs">
@@ -2700,6 +2701,12 @@ renderCalendario();
   firebase.initializeApp(firebaseConfig);
   var auth = firebase.auth();
   var db = firebase.firestore();
+  // Guardado local seguro: si el celular se queda sin señal (común en obra) o la app se cierra
+  // justo después de "Guardar", el cambio queda guardado en el propio dispositivo y se termina
+  // de subir a la nube en cuanto vuelva a haber conexión — ya no se pierde ni se pisa con datos viejos.
+  db.enablePersistence({ synchronizeTabs: true }).catch(function (err) {
+    console.warn('No se pudo activar el guardado local de Firestore:', err && err.code);
+  });
   var ALLOWED_EMAIL = 'car.aguilar.826@gmail.com';
   var origSetItem = Storage.prototype.setItem.bind(localStorage);
 
@@ -2728,10 +2735,54 @@ renderCalendario();
   };
   KEYS[STORAGE_CONFIG] = { apply: function (v) { config = v; }, render: function () {} };
 
+  // Cada guardado local lleva su propia marca de tiempo (clientTs). Un dato que llegue de la nube
+  // NUNCA pisa un guardado local más nuevo — así, si el guardado hacia la nube no alcanzó a
+  // completarse (sin señal, se cerró la app, se refrescó la página a medio subir, etc.), lo que
+  // se ve en el celular no desaparece, y en cuanto haya conexión se reintenta subir solo.
+  // Indicador visible de sincronización (debajo del título) para poder diagnosticar desde el
+  // propio celular sin necesidad de consola: muestra si está sincronizando, si terminó bien,
+  // o el error exacto si algo falla.
+  var pendingSync = 0;
+  function actualizarEstadoSync(errorMsg) {
+    var el = document.getElementById('sync-status');
+    if (!el) return;
+    if (errorMsg) {
+      el.textContent = '⚠ Error al sincronizar: ' + errorMsg;
+      el.style.color = '#FFCDD2';
+    } else if (pendingSync > 0) {
+      el.textContent = '↻ Sincronizando con la nube…';
+      el.style.color = '#fff';
+    } else if (auth.currentUser) {
+      var hora = new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      el.textContent = '✓ Sincronizado (' + auth.currentUser.email + ') · ' + hora;
+      el.style.color = '#C8E6C9';
+    } else {
+      el.textContent = 'Sin conexión con la cuenta';
+      el.style.color = '#FFCDD2';
+    }
+  }
+  function subirAFirestore(key, value, ts) {
+    pendingSync++;
+    actualizarEstadoSync();
+    return db.collection('lyonpark').doc(key).set({ json: value, clientTs: ts, updatedAt: firebase.firestore.FieldValue.serverTimestamp() })
+      .then(function () { pendingSync--; actualizarEstadoSync(); })
+      .catch(function (err) {
+        pendingSync--;
+        console.error('Error guardando en la nube:', key, err);
+        actualizarEstadoSync((err && (err.message || err.code)) || 'error desconocido');
+        avisarErrorSync();
+      });
+  }
+  function avisarErrorSync() {
+    try { toast('No se pudo sincronizar con la nube (revisa tu señal)'); } catch (e) {}
+  }
+
   localStorage.setItem = function (key, value) {
     origSetItem(key, value);
     if (KEYS[key] && auth.currentUser && auth.currentUser.email === ALLOWED_EMAIL) {
-      db.collection('lyonpark').doc(key).set({ json: value, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+      var ts = Date.now();
+      origSetItem(key + '__ts', String(ts));
+      subirAFirestore(key, value, ts);
     }
   };
 
@@ -2741,14 +2792,25 @@ renderCalendario();
     listenersStarted = true;
     Object.keys(KEYS).forEach(function (key) {
       db.collection('lyonpark').doc(key).onSnapshot(function (snap) {
+        var localTs = Number(localStorage.getItem(key + '__ts') || 0);
         if (!snap.exists) {
           var current = localStorage.getItem(key);
-          if (current) db.collection('lyonpark').doc(key).set({ json: current, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+          if (current) subirAFirestore(key, current, localTs || Date.now());
           return;
         }
-        var jsonStr = snap.data().json;
-        if (jsonStr === undefined || localStorage.getItem(key) === jsonStr) return;
+        var data = snap.data();
+        var jsonStr = data.json;
+        if (jsonStr === undefined) return;
+        if (localStorage.getItem(key) === jsonStr) return; // ya coincide, nada que hacer
+        var remoteTs = data.clientTs || 0;
+        if (remoteTs < localTs) {
+          // Lo que hay en el celular es más nuevo que lo que llegó de la nube (probable falla de
+          // red anterior): en vez de pisarlo, lo reenviamos para que la nube se ponga al día.
+          subirAFirestore(key, localStorage.getItem(key), localTs);
+          return;
+        }
         origSetItem(key, jsonStr);
+        origSetItem(key + '__ts', String(remoteTs));
         try { KEYS[key].apply(JSON.parse(jsonStr)); } catch (e) {}
         try { KEYS[key].render(); } catch (e) {}
       }, function (err) { console.error('Error de sincronizacion', key, err); });
@@ -2775,6 +2837,7 @@ renderCalendario();
       gate.style.display = 'none';
       wrap.style.display = '';
       startListeners();
+      actualizarEstadoSync();
     } else if (user) {
       wrap.style.display = 'none';
       gate.style.display = 'flex';
