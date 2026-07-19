@@ -259,7 +259,17 @@ header .sub { font-size: 12px; opacity: 0.85; margin-top: 2px; }
   <h1>ASISTENCIA Y AVANCE · LYON PARK PLAZA</h1>
   <div class="sub">CINEMEX · Contrato $300,871.91 · Lista de Raya + Destajo integrado</div>
   <div id="sync-status" style="font-size:10px;margin-top:5px;opacity:0.95">Conectando…</div>
+  <div id="diag-link" style="font-size:10px;margin-top:3px;opacity:0.85;text-decoration:underline;cursor:pointer">🔧 Probar conexión con la nube</div>
 </header>
+
+<div id="diag-overlay" style="display:none;position:fixed;inset:0;background:#111;color:#fff;z-index:3000;padding:18px;overflow:auto;font-family:-apple-system,monospace;font-size:13px;line-height:1.6">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+    <div style="font-size:16px;font-weight:700">Diagnóstico de conexión</div>
+    <button id="diag-close" style="background:#333;color:#fff;border:0;padding:8px 14px;border-radius:6px;font-size:13px">Cerrar</button>
+  </div>
+  <button id="diag-run" style="width:100%;padding:16px;font-size:15px;font-weight:700;background:#2E7D32;color:#fff;border:0;border-radius:8px;margin-bottom:14px">▶ Probar ahora</button>
+  <pre id="diag-output" style="white-space:pre-wrap;word-break:break-word;background:#000;padding:12px;border-radius:8px;min-height:120px;margin:0">Toca "Probar ahora" para revisar la conexión con la nube.</pre>
+</div>
 
 <div class="tabs">
   <div class="tab active" data-tab="dia">Registro</div>
@@ -2838,6 +2848,55 @@ renderCalendario();
       }, function (err) { console.error('Error de sincronizacion', key, err); });
     });
   }
+
+  // =========== DIAGNÓSTICO ===========
+  // Prueba directa y aislada de lectura/escritura contra Firestore, sin pasar por toda la
+  // lógica de la app (asistencia, catálogo, etc.) — para saber con certeza si el celular
+  // puede o no guardar en la nube, y mostrarlo en texto grande que se pueda mandar por captura.
+  var diagLink = document.getElementById('diag-link');
+  var diagOverlay = document.getElementById('diag-overlay');
+  var diagClose = document.getElementById('diag-close');
+  var diagRun = document.getElementById('diag-run');
+  var diagOutput = document.getElementById('diag-output');
+  if (diagLink) diagLink.onclick = function () { diagOverlay.style.display = 'block'; };
+  if (diagClose) diagClose.onclick = function () { diagOverlay.style.display = 'none'; };
+  if (diagRun) diagRun.onclick = function () {
+    var lineas = [];
+    function pintar() { diagOutput.textContent = lineas.join('\n'); }
+    lineas.push('Hora: ' + new Date().toLocaleString('es-MX'));
+    lineas.push('Usuario: ' + (auth.currentUser ? auth.currentUser.email : 'NINGUNO'));
+    lineas.push('navigator.onLine: ' + navigator.onLine);
+    lineas.push('Modo standalone (ícono): ' + (window.navigator.standalone ? 'sí' : 'no'));
+    lineas.push('Navegador: ' + navigator.userAgent);
+    lineas.push('');
+    lineas.push('1) Escribiendo documento de prueba…');
+    pintar();
+    var testId = 'test_' + Date.now();
+    var t0 = Date.now();
+    db.collection('lyonpark').doc('_diagnostico').set({ testId: testId, from: navigator.userAgent, ts: Date.now() })
+      .then(function () {
+        lineas.push('   ✓ Escritura aceptada localmente (' + (Date.now() - t0) + ' ms)');
+        lineas.push('2) Confirmando contra el servidor (fuente: server)…');
+        pintar();
+        var t1 = Date.now();
+        return db.collection('lyonpark').doc('_diagnostico').get({ source: 'server' }).then(function (snap) {
+          return { snap: snap, t1: t1 };
+        });
+      })
+      .then(function (r) {
+        var okServer = r.snap.exists && r.snap.data().testId === testId;
+        lineas.push('   ' + (okServer ? '✓ CONFIRMADO en el servidor' : '✗ NO coincide con lo que hay en el servidor') + ' (' + (Date.now() - r.t1) + ' ms)');
+        lineas.push('');
+        lineas.push(okServer ? '>>> RESULTADO: TODO BIEN. Este celular SÍ puede guardar en la nube. <<<' : '>>> RESULTADO: FALLÓ. El dato no llegó al servidor. <<<');
+        pintar();
+      })
+      .catch(function (err) {
+        lineas.push('   ✗ ERROR: ' + ((err && (err.code || err.message)) || err));
+        lineas.push('');
+        lineas.push('>>> RESULTADO: FALLÓ. Manda captura de esto completo. <<<');
+        pintar();
+      });
+  };
 
   var gate = document.getElementById('login-gate');
   var msg = document.getElementById('login-msg');
