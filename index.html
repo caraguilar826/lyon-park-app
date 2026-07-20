@@ -775,12 +775,23 @@ let extras = JSON.parse(localStorage.getItem(STORAGE_EXTRAS) || '{}');
 let avance = JSON.parse(localStorage.getItem(STORAGE_AVANCE) || '{}');
 let config = JSON.parse(localStorage.getItem(STORAGE_CONFIG) || '{"factorExtra":1.25}');
 
-const savePadron = () => localStorage.setItem(STORAGE_PADRON, JSON.stringify(padron));
-const saveCat = () => localStorage.setItem(STORAGE_CAT, JSON.stringify(catalogo));
-const saveAsist = () => localStorage.setItem(STORAGE_ASIST, JSON.stringify(asistencias));
-const saveExtras = () => localStorage.setItem(STORAGE_EXTRAS, JSON.stringify(extras));
-const saveAvance = () => localStorage.setItem(STORAGE_AVANCE, JSON.stringify(avance));
-const saveConfig = () => localStorage.setItem(STORAGE_CONFIG, JSON.stringify(config));
+// appSetItem: punto único que usan todos los save*() para escribir. Por defecto solo escribe
+// en el propio dispositivo (localStorage nativo). En cuanto carga el bloque de Firebase (más abajo),
+// esta misma variable se reasigna a una versión que ADEMÁS sube a la nube. Se usa una variable
+// normal de JavaScript (no una propiedad de localStorage) a propósito: en Safari/iOS, intentar
+// "parchar" localStorage.setItem directamente (incluso con Object.defineProperty) puede quedarse
+// sin efecto de forma silenciosa, porque Storage es un objeto especial del navegador con reglas
+// propias de lectura/escritura. Una variable normal como esta SIEMPRE se puede reasignar en
+// cualquier navegador, así que es la forma confiable de garantizar que cada guardado real también
+// dispare la subida a la nube.
+window.appSetItem = function (key, value) { localStorage.setItem(key, value); };
+
+const savePadron = () => window.appSetItem(STORAGE_PADRON, JSON.stringify(padron));
+const saveCat = () => window.appSetItem(STORAGE_CAT, JSON.stringify(catalogo));
+const saveAsist = () => window.appSetItem(STORAGE_ASIST, JSON.stringify(asistencias));
+const saveExtras = () => window.appSetItem(STORAGE_EXTRAS, JSON.stringify(extras));
+const saveAvance = () => window.appSetItem(STORAGE_AVANCE, JSON.stringify(avance));
+const saveConfig = () => window.appSetItem(STORAGE_CONFIG, JSON.stringify(config));
 
 // =========== GUARDAR / DESHACER (control manual de cambios) ===========
 // Las ediciones en Personal, Catálogo y Registro (día) ya no se guardan solas:
@@ -2810,13 +2821,14 @@ renderCalendario();
     try { toast('No se pudo sincronizar con la nube (revisa tu señal)'); } catch (e) {}
   }
 
-  // OJO (causa raíz encontrada en iPad/Safari): reasignar "localStorage.setItem = function(){...}"
-  // directamente puede quedar en silencio sin efecto en Safari/WebKit, porque setItem ya existe
-  // en el prototipo de Storage como no-escribible — la asignación normal no la reemplaza ahí,
-  // aunque en Chrome sí funciona (por eso nunca se veía el problema en las pruebas de escritorio).
-  // Con Object.defineProperty se fuerza una propiedad propia en el objeto localStorage, que sí
-  // tiene prioridad sobre el prototipo en todos los navegadores.
-  var nuevoSetItem = function (key, value) {
+  // OJO (causa raíz encontrada en iPad/Safari): antes esta app intentaba "parchar"
+  // localStorage.setItem directamente (incluso con Object.defineProperty) para que cada guardado
+  // también subiera a la nube. En computadora (Chrome) funcionaba, pero en Safari de iPad/iPhone
+  // se quedaba sin efecto de forma silenciosa: el guardado local se hacía bien, pero la subida a
+  // la nube nunca se disparaba. Por eso ahora TODOS los save*() llaman a window.appSetItem(...)
+  // (una variable normal de JavaScript, no una propiedad de localStorage), y aquí simplemente la
+  // reasignamos. Reasignar una variable normal es 100% confiable en cualquier navegador.
+  window.appSetItem = function (key, value) {
     origSetItem(key, value);
     if (KEYS[key] && auth.currentUser && auth.currentUser.email === ALLOWED_EMAIL) {
       var ts = Date.now();
@@ -2824,12 +2836,6 @@ renderCalendario();
       subirAFirestore(key, value, ts);
     }
   };
-  try {
-    Object.defineProperty(window.localStorage, 'setItem', { value: nuevoSetItem, writable: true, configurable: true });
-  } catch (e) {
-    console.error('No se pudo interceptar localStorage.setItem:', e);
-    localStorage.setItem = nuevoSetItem;
-  }
 
   var listenersStarted = false;
   function startListeners() {
@@ -2914,7 +2920,7 @@ renderCalendario();
   var diagRun2 = document.getElementById('diag-run2');
   if (diagRun2) diagRun2.onclick = function () {
     // Esta prueba usa el MISMO camino que usa Personal/Registro de verdad (savePadron/saveAsist,
-    // el localStorage.setItem parchado, el candado de clientTs y el listener en vivo), pero sobre
+    // window.appSetItem, el candado de clientTs y el listener en vivo), pero sobre
     // una fecha de prueba que no toca tus datos reales — para reproducir el problema tal cual.
     var lineas = [];
     function pintar() { diagOutput.textContent = lineas.join('\n'); }
