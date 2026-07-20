@@ -2810,7 +2810,13 @@ renderCalendario();
     try { toast('No se pudo sincronizar con la nube (revisa tu señal)'); } catch (e) {}
   }
 
-  localStorage.setItem = function (key, value) {
+  // OJO (causa raíz encontrada en iPad/Safari): reasignar "localStorage.setItem = function(){...}"
+  // directamente puede quedar en silencio sin efecto en Safari/WebKit, porque setItem ya existe
+  // en el prototipo de Storage como no-escribible — la asignación normal no la reemplaza ahí,
+  // aunque en Chrome sí funciona (por eso nunca se veía el problema en las pruebas de escritorio).
+  // Con Object.defineProperty se fuerza una propiedad propia en el objeto localStorage, que sí
+  // tiene prioridad sobre el prototipo en todos los navegadores.
+  var nuevoSetItem = function (key, value) {
     origSetItem(key, value);
     if (KEYS[key] && auth.currentUser && auth.currentUser.email === ALLOWED_EMAIL) {
       var ts = Date.now();
@@ -2818,6 +2824,12 @@ renderCalendario();
       subirAFirestore(key, value, ts);
     }
   };
+  try {
+    Object.defineProperty(window.localStorage, 'setItem', { value: nuevoSetItem, writable: true, configurable: true });
+  } catch (e) {
+    console.error('No se pudo interceptar localStorage.setItem:', e);
+    localStorage.setItem = nuevoSetItem;
+  }
 
   var listenersStarted = false;
   function startListeners() {
